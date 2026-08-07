@@ -207,6 +207,60 @@ copy docs/agents/domain.md              docs/agents/domain.md
 # 4 lines instead of 18. This copy carries the corrected value.
 copy commands/claude/trellis/continue.md .claude/commands/trellis/continue.md
 
+# ------------------------------------------------- superseded skills, gated --
+# Trellis ships a `trellis-brainstorm` skill and a `trellis-check` skill; this graft
+# replaced what both do. Their descriptions still match the triggers they always
+# matched, so the main session can auto-load one and land back on the workflow this
+# graft replaced. `trellis-check` is the worse case: it is the exact name of the
+# read-only sub-agent Phase 2.2 dispatches, and the skill self-fixes.
+#
+# Until now the only guard was a line in the AGENTS.md section telling the model to
+# ignore them — prose against a skill whose description matches the trigger better
+# than the prose does. `disable-model-invocation: true` is the Claude Code mechanism
+# built for this: the description stops being loaded into context at all, so the
+# model cannot reach the skill, while `/trellis-brainstorm` still works by hand.
+#
+# Editing the deployed file is what Trellis's own trellis-meta docs call the
+# supported override pattern: the hash diverges from .template-hashes.json and
+# `trellis update` then leaves the file alone. `trellis update -s` above makes that
+# skip automatic rather than an interactive keep/overwrite prompt. Two caveats from
+# those same docs — the override is per-platform (hence the glob over every platform
+# skill root), and `trellis update --force` would overwrite it (re-run this script).
+
+info "gating superseded Trellis skills"
+if [ "$DRY_RUN" = 1 ]; then
+  printf '  %s[dry-run] add disable-model-invocation to trellis-brainstorm / trellis-check SKILL.md in every platform skill root%s\n' "$DIM" "$RST"
+else
+  python3 - "$TARGET" trellis-brainstorm trellis-check <<'PY' | while IFS= read -r line; do ok "$line"; done
+import pathlib, sys
+
+target, names = pathlib.Path(sys.argv[1]), sys.argv[2:]
+FLAG = "disable-model-invocation: true"
+lines = []
+
+for name in names:
+    # Platform skill roots are all one hidden directory deep: .claude/skills/,
+    # .agents/skills/, .codex/skills/, .reasonix/skills/, .kimi-code/skills/, …
+    for skill in sorted(target.glob(f".*/skills/{name}/SKILL.md")):
+        rel = skill.relative_to(target)
+        text = skill.read_text(encoding="utf-8")
+        if not text.startswith("---\n"):
+            lines.append(f"{rel} has no frontmatter — left alone")
+            continue
+        end = text.find("\n---", 3)          # newline before the closing fence
+        if end == -1:
+            lines.append(f"{rel} frontmatter is unterminated — left alone")
+            continue
+        if "disable-model-invocation" in text[:end]:
+            lines.append(f"{rel} already gated")
+            continue
+        skill.write_text(text[:end] + "\n" + FLAG + text[end:], encoding="utf-8")
+        lines.append(f"{rel} gated")
+
+print("\n".join(lines) if lines else "no superseded skills present — nothing to gate")
+PY
+fi
+
 # --------------------------------------------------------- AGENTS.md, marker --
 # Idempotent: replace between the markers if present, append if not. Appending
 # always lands outside the <!-- TRELLIS --> managed block, which is what keeps

@@ -210,6 +210,30 @@ trellis-graft --dry-run
 外加 `AGENTS.md` 里一段用 marker 包裹的说明，位置在 `<!-- TRELLIS -->` 托管块**之外**，
 所以 `trellis update` 会把 AGENTS.md 判为 unchanged，不会来打扰。
 
+### 还会关掉两个被换掉的 Trellis 技能
+
+`trellis-brainstorm` 和 `trellis-check`（**技能**，不是同名的那个子代理）被这个 graft
+换掉了，但它们的 description 还留在原地：一个的触发词是"需求不清楚、或用户描述了一个新
+功能"，一个是"代码写完需要质检、提交之前"——正好是 Phase 1.1 和 Phase 2.2 的入口。
+更糟的是 `grill-with-docs` 带 `disable-model-invocation`、模型根本看不见，所以这场触发
+词竞争是单方面的。以前唯一的拦阻是 AGENTS.md 里一句"别加载它"，拿散文去跟一个描述匹配
+得更准的技能抢。
+
+现在 `install.sh` 往这两个技能的 `SKILL.md` frontmatter 各加一行：
+
+```yaml
+disable-model-invocation: true
+```
+
+description 从此不进上下文，模型看不到、也调不动；你仍然可以手敲 `/trellis-brainstorm`
+和 `/trellis-check`。每个平台的 skill root 都会改（`.claude/skills/`、`.agents/skills/`
+……），因为这个覆盖是按平台生效的。重复跑幂等，已经加过就跳过。
+
+这正是 Trellis 官方 `trellis-meta` 文档里写的 override 方式：改本地文件 → hash 与
+`.template-hashes.json` 分叉 → `trellis update` 认出这是用户改动就不再碰它。install.sh
+跑的 `trellis update -s` 让这个跳过自动发生，不会弹 keep / overwrite 询问。唯一会覆盖它
+的是 `trellis update --force`，之后重跑 `trellis-graft` 补回来即可。
+
 ### 跑完还要手动做两件事
 
 **1. 装技能**（每台机器一次，14 个仓库共享）：
@@ -231,6 +255,9 @@ npx skills@latest add mattpocock/skills -g --copy -y -a claude-code \
 ```bash
 # 平台块正文没被丢：应该是十几行，不是 4 行
 python3 ./.trellis/scripts/get_context.py --mode phase --step 2.2 --platform claude-code
+
+# 两个被换掉的技能已关掉：每个平台 skill root 各输出一行
+grep -l 'disable-model-invocation' .*/skills/trellis-brainstorm/SKILL.md .*/skills/trellis-check/SKILL.md
 
 # 新会话里 agent 列表应显示 trellis-check (Tools: Read, Bash, Glob, Grep)
 ```
