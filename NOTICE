@@ -1,0 +1,51 @@
+trellis-graft
+=============
+
+This repository contains modified versions of files from Trellis, and unmodified
+copies of Trellis template files kept as a merge baseline.
+
+Upstream project
+----------------
+
+  Trellis — AI-assisted development workflow framework
+  Copyright (c) Mindfold AI
+  https://github.com/mindfold-ai/Trellis
+  Licensed under the GNU Affero General Public License v3.0 only
+
+Because the files below are derived from Trellis, this repository is distributed
+under the same license. See LICENSE for the full text.
+
+Files derived from Trellis (modified)
+-------------------------------------
+
+  workflows/trellis-mattpocock/workflow.md
+      Modified from Trellis's native workflow template. The three-phase state
+      machine, the [workflow-state:*] contract, the platform routing markers and
+      the #### X.Y step structure are unchanged; the prose naming which skill
+      each phase loads has been rewritten.
+
+  agents/claude/trellis-implement.md
+  agents/claude/trellis-check.md
+  agents/claude/trellis-research.md
+      Modified from Trellis's Claude Code sub-agent definitions.
+
+  agents/channel/check.md
+  agents/channel/implement.md
+      Modified from Trellis's channel-runtime agent role cards.
+
+Files copied from Trellis verbatim (unmodified)
+-----------------------------------------------
+
+  upstream/**
+      Byte-for-byte copies of the Trellis templates that the modified files
+      above were derived from, at the version recorded in upstream/VERSION.
+      They exist solely as the BASE for the three-way merge performed by
+      upgrade.sh, and are never installed into a target repository.
+
+Third-party work NOT redistributed here
+---------------------------------------
+
+  mattpocock/skills — https://github.com/mattpocock/skills
+      The engineering skills this workflow routes to are NOT included in this
+      repository. They are installed separately from their own upstream via
+      `npx skills add mattpocock/skills`, under their own license.

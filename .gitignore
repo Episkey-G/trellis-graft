@@ -1,0 +1,5 @@
+# upgrade.sh resume state — local to one in-progress upgrade
+.upgrade-state
+
+# npm pack leftovers, if a fetch is interrupted
+*.tgz

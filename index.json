@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "trellis-mattpocock",
+      "type": "workflow",
+      "name": "Trellis × mattpocock Engineering Skills",
+      "description": "Trellis phase machine driving mattpocock/skills: grill-with-docs to-spec to-tickets in Phase 1; tdd via the trellis-implement sub-agent and a two-axis read-only trellis-check in Phase 2",
+      "path": "workflows/trellis-mattpocock/workflow.md",
+      "tags": ["workflow", "tdd", "grilling", "sub-agent", "two-axis-review"]
+    }
+  ]
+}
