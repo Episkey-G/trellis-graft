@@ -56,18 +56,67 @@ sub-agent 定义要么沿用 Trellis 自带的，要么手动照着 `agents/clau
 
 ---
 
-## 场景一：仓库还没装过 Trellis
+## 怎么调用它 —— 不用复制到项目里
 
-一条命令搞定，`install.sh` 发现 `.trellis/` 不存在时会自己调 `trellis init`：
+`install.sh` 从来不需要复制进目标仓库，`--target` 指哪打哪。三条路，按你手上有没有
+checkout 选：
+
+### 一、直接调 checkout 里的脚本
 
 ```bash
 /path/to/trellis-graft/install.sh --target /path/to/your-repo
 ```
 
+### 二、软链到 PATH（推荐日常用，一次设置）
+
+在 trellis-graft checkout 里执行一次：
+
+```bash
+ln -s "$PWD/install.sh" ~/.local/bin/trellis-graft
+```
+
+之后在任何仓库里就是一个词，`--target` 缺省为当前目录：
+
+```bash
+cd ~/some-project && trellis-graft
+```
+
+脚本会先解开符号链接找到真正的 checkout，所以装的是**你本地这一份**，不走网络，
+本地没推的改动也照样生效。
+
+### 三、`curl | bash`（新机器、CI，本地没 clone 过）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Episkey-G/trellis-graft/main/install.sh \
+  | bash -s -- --target .
+```
+
+这条路没有本地 checkout，脚本自己浅克隆一份到临时目录，跑完删掉。
+`--ref` 只在这条路上有意义，用来钉版本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Episkey-G/trellis-graft/main/install.sh \
+  | bash -s -- --target . --ref v1.0.0
+```
+
+三条路的硬要求都一样：`trellis`、`git`、`python3` 在 PATH 上，目标是个 git 仓库。
+
+下文的命令一律写成软链后的 `trellis-graft`，换成前两种写法等价。
+
+---
+
+## 场景一：仓库还没装过 Trellis
+
+一条命令搞定，`install.sh` 发现 `.trellis/` 不存在时会自己调 `trellis init`：
+
+```bash
+cd /path/to/your-repo && trellis-graft
+```
+
 平台默认 `claude`，换平台用 `--platform`：
 
 ```bash
-/path/to/trellis-graft/install.sh --target . --platform cursor
+trellis-graft --platform cursor
 ```
 
 它内部执行的是：
@@ -108,7 +157,7 @@ tinit() {
 但两者的动作完全一样：
 
 ```bash
-/path/to/trellis-graft/install.sh --target /path/to/your-repo
+cd /path/to/your-repo && trellis-graft
 ```
 
 ### 它内部到底跑了什么
@@ -140,7 +189,7 @@ scripts / hooks，正是我们要的——而且非交互，所以能写进脚�
 ### 先看看会改什么
 
 ```bash
-/path/to/trellis-graft/install.sh --target /path/to/your-repo --dry-run
+trellis-graft --dry-run
 ```
 
 列出将执行的命令和将写入的路径，不落盘。
@@ -242,7 +291,7 @@ THEIRS = 新版 npm 包里的同一文件      上游的新原版
 各消费仓库再跑一次场景二/三那条命令即可：
 
 ```bash
-/path/to/trellis-graft/install.sh --target .
+cd /path/to/your-repo && trellis-graft
 ```
 
 ---
@@ -277,8 +326,9 @@ agents/channel/                     → 目标仓库 .trellis/agents/
 commands/claude/trellis/            → 目标仓库 .claude/commands/trellis/
 docs/agents/                        → 目标仓库 docs/agents/
 snippets/agents-md-section.md       → 注入目标仓库 AGENTS.md
-install.sh                          目标仓库侧唯一命令（接入 = 升级）
+install.sh                          目标仓库侧唯一命令（接入 = 升级，从任意位置调用）
 upgrade.sh                          本仓库侧唯一命令（跟进上游）
+CLAUDE.md                           跟进上游的操作规程，供 Claude Code 会话启动时加载
 ```
 
 ---

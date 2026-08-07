@@ -9,6 +9,12 @@
 # Scenarios 2 and 3 do exactly the same thing, so there is no --upgrade switch:
 # adopting and upgrading are one command.
 #
+# It never needs to be copied into the target repository. Three ways to reach it:
+#
+#   ./install.sh --target <repo>                    from a checkout
+#   ln -s "$PWD/install.sh" ~/.local/bin/trellis-graft   then `trellis-graft` in any repo
+#   curl -fsSL <raw-url>/install.sh | bash -s -- --target .   no checkout at all
+#
 # This script never writes .trellis/workflow.md itself. It calls the official
 # `trellis init` / `trellis workflow` to do that, and only orchestrates.
 #
@@ -51,9 +57,9 @@ run() {
 
 usage() {
   cat <<'USAGE'
-usage: install.sh --target <repo-path> [options]
+usage: install.sh [--target <repo-path>] [options]
 
-  --target   <path>   repository to install into (required)
+  --target   <path>   repository to install into (default: current directory)
   --ref      <ref>    git ref of trellis-graft to install from. Only applies when
                       this script fetches a copy; ignored (with a warning) when
                       you run it from an existing checkout.
@@ -77,7 +83,7 @@ done
 
 # ---------------------------------------------------------------- preflight --
 
-[ -n "$TARGET" ] || { usage >&2; die "--target is required"; }
+[ -n "$TARGET" ] || TARGET="$PWD"
 TARGET="$(cd "$TARGET" 2>/dev/null && pwd)" || die "target does not exist: $TARGET"
 
 command -v trellis  >/dev/null 2>&1 || die "trellis CLI not on PATH — npm i -g @mindfoldhq/trellis"
@@ -97,13 +103,33 @@ fi
 
 # ------------------------------------------------------------------- source --
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Directory of the real script, symlinks resolved. Without the resolve loop a
+# `~/.local/bin/trellis-graft -> ~/trellis-graft/install.sh` symlink reports
+# ~/.local/bin, the checkout probe below misses, and every run silently re-clones
+# from the remote — ignoring whatever is in the checkout you meant to install.
+script_dir() {
+  local src="$1" dir
+  while [ -L "$src" ]; do
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    case "$src" in /*) ;; *) src="$dir/$src" ;; esac   # link target may be relative
+  done
+  ( cd -P "$(dirname "$src")" && pwd )
+}
+
+# Empty when the script arrives on stdin (`curl … | bash`): there is no checkout
+# to install from, so the branch below fetches one. Defaulting to $PWD here would
+# make the install source depend on which directory you happened to stand in.
+SELF="${BASH_SOURCE[0]:-}"
+HERE=""
+if [ -n "$SELF" ]; then HERE="$(script_dir "$SELF")"; fi
+
 CLEANUP=""
 # Install the trap BEFORE mktemp/clone: under `set -e` a failed clone (bad ref,
 # no network) exits immediately, and a trap installed after it never fires.
 trap '[ -n "$CLEANUP" ] && rm -rf "$CLEANUP"' EXIT
 
-if [ -f "$HERE/index.json" ] && [ -d "$HERE/agents/claude" ]; then
+if [ -n "$HERE" ] && [ -f "$HERE/index.json" ] && [ -d "$HERE/agents/claude" ]; then
   SRC="$HERE"                                        # running from a checkout
   [ -n "$REF" ] && warn "--ref $REF ignored: installing from the checkout at $HERE (git -C '$HERE' checkout '$REF' first if you meant that ref)"
 else
@@ -111,6 +137,10 @@ else
   info "fetching trellis-graft@${REF:-main}"
   git clone --depth 1 --branch "${REF:-main}" --quiet "$REPO_URL" "$SRC"
 fi
+
+# --target defaults to $PWD, so a bare run inside this repo would otherwise try
+# to graft trellis-graft onto itself.
+[ "$TARGET" != "$SRC" ] || die "target is the trellis-graft checkout itself — pass --target <repo-path>"
 
 GRAFT_VERSION="$(tr -d '[:space:]' < "$SRC/VERSION")"
 

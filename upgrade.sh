@@ -248,5 +248,6 @@ Review the diff, then publish:
 
 Then in each consuming repository:
 
-  /path/to/trellis-graft/install.sh --target .
+  trellis-graft                              # if install.sh is symlinked onto PATH
+  $HERE/install.sh --target .   # otherwise
 EOF
