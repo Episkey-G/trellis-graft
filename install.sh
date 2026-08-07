@@ -2,8 +2,6 @@
 #
 # install.sh — the only command a target repository needs.
 #
-# Covers three scenarios and picks the right one itself:
-#
 #   1. brand-new repo      (.trellis/ missing)  -> trellis init with this workflow, then copy
 #   2. first-time adoption (stock Trellis)      -> trellis update -s, swap workflow, then copy
 #   3. later upgrade       (graft already there)-> identical to 2
@@ -13,6 +11,8 @@
 #
 # This script never writes .trellis/workflow.md itself. It calls the official
 # `trellis init` / `trellis workflow` to do that, and only orchestrates.
+#
+#HELP-END
 
 set -euo pipefail
 
@@ -22,21 +22,41 @@ WORKFLOW_ID="trellis-mattpocock"
 MIN_TRELLIS="0.6.14"
 
 TARGET=""
-REF="main"
+REF=""
 PLATFORM="claude"
 DRY_RUN=0
 
-die()  { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
-info() { printf '\033[34m==>\033[0m %s\n' "$*"; }
-ok()   { printf '\033[32m  ok\033[0m %s\n' "$*"; }
-run()  { if [ "$DRY_RUN" = 1 ]; then printf '  \033[90m[dry-run] %s\033[0m\n' "$*"; else eval "$@"; fi; }
+# Colours only when stdout is a terminal — otherwise piping to a log file
+# embeds escape codes in it.
+if [ -t 1 ]; then
+  RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; BLU=$'\033[34m'; DIM=$'\033[90m'; RST=$'\033[0m'
+else
+  RED=''; GRN=''; YEL=''; BLU=''; DIM=''; RST=''
+fi
+
+die()  { printf '%serror:%s %s\n' "$RED" "$RST" "$*" >&2; exit 1; }
+info() { printf '%s==>%s %s\n' "$BLU" "$RST" "$*"; }
+ok()   { printf '  %sok%s %s\n' "$GRN" "$RST" "$*"; }
+warn() { printf '  %s!!%s %s\n' "$YEL" "$RST" "$*"; }
+
+# Runs a command inside $TARGET. Takes an argv array, never a string, so paths
+# containing spaces or quotes survive; `eval` would mangle them.
+run() {
+  if [ "$DRY_RUN" = 1 ]; then
+    printf '  %s[dry-run] (cd %s && %s)%s\n' "$DIM" "$TARGET" "$*" "$RST"
+    return 0
+  fi
+  ( cd "$TARGET" && "$@" )
+}
 
 usage() {
   cat <<'USAGE'
 usage: install.sh --target <repo-path> [options]
 
   --target   <path>   repository to install into (required)
-  --ref      <ref>    git ref of trellis-graft to install from (default: main)
+  --ref      <ref>    git ref of trellis-graft to install from. Only applies when
+                      this script fetches a copy; ignored (with a warning) when
+                      you run it from an existing checkout.
   --platform <name>   AI platform flag for `trellis init` on a brand-new repo
                       (default: claude; e.g. cursor, codex, gemini)
   --dry-run           print what would happen; write nothing
@@ -79,14 +99,18 @@ fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLEANUP=""
+# Install the trap BEFORE mktemp/clone: under `set -e` a failed clone (bad ref,
+# no network) exits immediately, and a trap installed after it never fires.
+trap '[ -n "$CLEANUP" ] && rm -rf "$CLEANUP"' EXIT
+
 if [ -f "$HERE/index.json" ] && [ -d "$HERE/agents/claude" ]; then
   SRC="$HERE"                                        # running from a checkout
+  [ -n "$REF" ] && warn "--ref $REF ignored: installing from the checkout at $HERE (git -C '$HERE' checkout '$REF' first if you meant that ref)"
 else
   SRC="$(mktemp -d)"; CLEANUP="$SRC"
-  info "fetching trellis-graft@$REF"
-  git clone --depth 1 --branch "$REF" --quiet "$REPO_URL" "$SRC"
+  info "fetching trellis-graft@${REF:-main}"
+  git clone --depth 1 --branch "${REF:-main}" --quiet "$REPO_URL" "$SRC"
 fi
-trap '[ -n "$CLEANUP" ] && rm -rf "$CLEANUP"' EXIT
 
 GRAFT_VERSION="$(tr -d '[:space:]' < "$SRC/VERSION")"
 
@@ -115,26 +139,26 @@ if [ "$SCENARIO" = "new" ]; then
   # -y is required, not cosmetic: without it `trellis init` opens an interactive
   # prompt (statusLine, among others) and dies with ERR_USE_AFTER_CLOSE the moment
   # it runs anywhere without a TTY.
-  run "(cd '$TARGET' && trellis init -y --$PLATFORM --workflow '$WORKFLOW_ID' --workflow-source '$MARKETPLACE')"
+  run trellis init -y "--$PLATFORM" --workflow "$WORKFLOW_ID" --workflow-source "$MARKETPLACE"
 else
   # -s = skip every file the user modified. In a graft repo those modified files
   # are exactly our customisations, so this updates scripts/hooks and leaves the
   # graft alone — and it is non-interactive, which is what makes it scriptable.
-  run "(cd '$TARGET' && trellis update -s)"
+  run trellis update -s
   # workflow.md is always 'modified'; -f is the whole point of an upgrade.
-  run "(cd '$TARGET' && trellis workflow -m '$MARKETPLACE' -t '$WORKFLOW_ID' -f)"
+  run trellis workflow -m "$MARKETPLACE" -t "$WORKFLOW_ID" -f
 fi
 ok "workflow.md handled by the official channel"
 
-# ------------------------------------------------------------- the 7 artifacts --
+# ------------------------------------------------------------- the artifacts --
 
 copy() {  # copy <src-rel> <dst-rel>
   local s="$SRC/$1" d="$TARGET/$2"
   [ -f "$s" ] || die "missing in source: $1"
-  if [ "$DRY_RUN" = 1 ]; then printf '  \033[90m[dry-run] write %s\033[0m\n' "$2"; return; fi
+  if [ "$DRY_RUN" = 1 ]; then printf '  %s[dry-run] write %s%s\n' "$DIM" "$2" "$RST"; return 0; fi
   mkdir -p "$(dirname "$d")"
   cp "$s" "$d"
-  printf '  \033[32mok\033[0m %s\n' "$2"
+  ok "$2"
 }
 
 info "installing agent definitions, the /trellis:continue fix, and docs"
@@ -160,9 +184,9 @@ copy commands/claude/trellis/continue.md .claude/commands/trellis/continue.md
 
 info "injecting AGENTS.md section"
 if [ "$DRY_RUN" = 1 ]; then
-  printf '  \033[90m[dry-run] update AGENTS.md marker block to v=%s\033[0m\n' "$GRAFT_VERSION"
+  printf '  %s[dry-run] update AGENTS.md marker block to v=%s%s\n' "$DIM" "$GRAFT_VERSION" "$RST"
 else
-  python3 - "$TARGET/AGENTS.md" "$SRC/snippets/agents-md-section.md" "$GRAFT_VERSION" <<'PY'
+  was="$(python3 - "$TARGET/AGENTS.md" "$SRC/snippets/agents-md-section.md" "$GRAFT_VERSION" <<'PY'
 import pathlib, re, sys
 
 target, snippet_path, version = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
@@ -172,22 +196,30 @@ block = f"<!-- MATTPOCOCK-GRAFT:START v={version} -->\n{body}\n<!-- MATTPOCOCK-G
 existing = target.read_text(encoding="utf-8") if target.exists() else ""
 pattern = re.compile(r"<!-- MATTPOCOCK-GRAFT:START[^>]*-->.*?<!-- MATTPOCOCK-GRAFT:END -->", re.S)
 
-was = m.group(0).split("v=")[1].split(" ")[0] if (m := pattern.search(existing)) else None
+m = pattern.search(existing)
 if m:
     updated = pattern.sub(lambda _: block, existing, count=1)
+    print(m.group(0).split("v=")[1].split(" ")[0])
 else:
     updated = (existing.rstrip() + "\n\n" + block + "\n") if existing.strip() else block + "\n"
+    print("(new)")
 
 target.write_text(updated, encoding="utf-8")
-print(f"  \033[32mok\033[0m AGENTS.md marker {was or '(new)'} -> {version}")
 PY
+)"
+  ok "AGENTS.md marker $was -> $GRAFT_VERSION"
 fi
 
 # ------------------------------------------------------------------ summary --
 
+if [ "$DRY_RUN" = 1 ]; then
+  printf '\n%sDry run complete.%s Nothing was written. Re-run without --dry-run to apply.\n' "$YEL" "$RST"
+  exit 0
+fi
+
 cat <<EOF
 
-$(printf '\033[32mDone.\033[0m') trellis-graft $GRAFT_VERSION installed into $TARGET
+${GRN}Done.${RST} trellis-graft $GRAFT_VERSION installed into $TARGET
 
 Two things this script deliberately does NOT do — finish them by hand:
 

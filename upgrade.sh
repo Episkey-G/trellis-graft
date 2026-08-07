@@ -15,6 +15,8 @@
 #   5. refresh upstream/ to the new BASE, bump VERSION, print the git commands
 #
 # Step 5 prints the git commands rather than running them. Publishing is a decision.
+#
+#HELP-END
 
 set -euo pipefail
 
@@ -25,15 +27,25 @@ STATE=".upgrade-state"
 TARGET_VERSION="latest"
 RESUME=0
 
-die()  { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
-info() { printf '\n\033[34m==>\033[0m %s\n' "$*"; }
-ok()   { printf '  \033[32mok\033[0m %s\n' "$*"; }
-warn() { printf '  \033[33m!!\033[0m %s\n' "$*"; }
+if [ -t 1 ]; then
+  RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; BLU=$'\033[34m'; RST=$'\033[0m'
+else
+  RED=''; GRN=''; YEL=''; BLU=''; RST=''
+fi
+
+die()  { printf '%serror:%s %s\n' "$RED" "$RST" "$*" >&2; exit 1; }
+info() { printf '\n%s==>%s %s\n' "$BLU" "$RST" "$*"; }
+ok()   { printf '  %sok%s %s\n' "$GRN" "$RST" "$*"; }
+warn() { printf '  %s!!%s %s\n' "$YEL" "$RST" "$*"; }
+
+# Print the header comment as help, stopping at the sentinel. A hardcoded line
+# range drifts the moment the header grows and starts leaking shell code.
+usage() { sed -n '2,/^#HELP-END$/p' "$0" | grep -v '^#HELP-END$' | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --continue) RESUME=1; shift ;;
-    -h|--help)  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)  usage; exit 0 ;;
     -*)         die "unknown argument: $1" ;;
     *)          TARGET_VERSION="$1"; shift ;;
   esac
@@ -53,6 +65,19 @@ FILES=(
   "agents/channel/implement.md|trellis/agents/implement.md"
   "commands/claude/trellis/continue.md|common/commands/continue.md"
 )
+
+# continue.md ships with {{PYTHON_CMD}} / {{CLI_FLAG}} placeholders that init
+# substitutes. Substituting both merge sides identically makes the merge compare
+# real changes instead of re-conflicting on the placeholder every single time.
+subst() {  # subst <in> <out>
+  python3 - "$1" "$2" <<'PY'
+import pathlib, sys
+src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+dst.write_text(src.read_text(encoding="utf-8")
+               .replace("{{PYTHON_CMD}}", "python3")
+               .replace("{{CLI_FLAG}}", "claude-code"), encoding="utf-8")
+PY
+}
 
 # ------------------------------------------------------------------ resume --
 
@@ -76,7 +101,7 @@ else
 
   OLD_VERSION="$(tr -d '[:space:]' < upstream/VERSION)"
   if [ "$OLD_VERSION" = "$RESOLVED_VERSION" ]; then
-    printf '\n\033[32mAlready current.\033[0m upstream/ is already at %s — nothing to merge.\n' "$OLD_VERSION"
+    printf '\n%sAlready current.%s upstream/ is already at %s — nothing to merge.\n' "$GRN" "$RST" "$OLD_VERSION"
     exit 0
   fi
   info "moving BASE from $OLD_VERSION to $RESOLVED_VERSION"
@@ -97,28 +122,12 @@ else
   CONFLICTED=""
   for entry in "${FILES[@]}"; do
     ours="${entry%%|*}"; rel="${entry##*|}"
-    base="upstream/$rel"
     theirs="$NEW_TEMPLATES/$rel"
     [ -f "$theirs" ] || { warn "$rel vanished upstream — review by hand"; CONFLICTED="$CONFLICTED $ours"; continue; }
 
-    # continue.md ships with {{PYTHON_CMD}} / {{CLI_FLAG}} placeholders that init
-    # substitutes. Substitute both sides identically so the merge compares real
-    # changes instead of re-conflicting on the placeholder every single time.
     b="$(mktemp)"; t="$(mktemp)"
-    python3 - "$base" "$b" <<'PY'
-import pathlib, sys
-src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-dst.write_text(src.read_text(encoding="utf-8")
-               .replace("{{PYTHON_CMD}}", "python3")
-               .replace("{{CLI_FLAG}}", "claude-code"), encoding="utf-8")
-PY
-    python3 - "$theirs" "$t" <<'PY'
-import pathlib, sys
-src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
-dst.write_text(src.read_text(encoding="utf-8")
-               .replace("{{PYTHON_CMD}}", "python3")
-               .replace("{{CLI_FLAG}}", "claude-code"), encoding="utf-8")
-PY
+    subst "upstream/$rel" "$b"
+    subst "$theirs"       "$t"
 
     if cmp -s "$b" "$t"; then
       ok "$rel — upstream unchanged"
@@ -133,13 +142,15 @@ PY
   done
 
   if [ -n "$CONFLICTED" ]; then
+    # Keep $WORK alive: --continue needs the fetched templates for step 5.
     {
       printf 'RESOLVED_VERSION=%s\n' "$RESOLVED_VERSION"
       printf 'NEW_TEMPLATES=%s\n' "$NEW_TEMPLATES"
+      printf 'WORK=%s\n' "$WORK"
     } > "$STATE"
     cat <<EOF
 
-$(printf '\033[33mStopped at step 3.\033[0m') Conflicts in:$CONFLICTED
+${YEL}Stopped at step 3.${RST} Conflicts in:$CONFLICTED
 
 Each conflict block shows three sections: ours / base / upstream. Keep your graft's
 intent, take upstream's structural changes. Conflicts land only where you edited —
@@ -186,14 +197,15 @@ for name in ("no_task", "planning", "in_progress"):
         failures.append(f"[workflow-state:{name}] is missing or empty")
 
 if failures:
-    print("\033[31m  FAILED\033[0m")
+    print("  FAILED")
     for f in failures:
         print(f"    - {f}")
     sys.exit(1)
 
-print(f"  \033[32mok\033[0m {len(opened)} workflow-state pairs, "
-      f"{len(plat_open)} platform markers, {len(steps)} steps: {' '.join(steps)}")
+print(f"  {len(opened)} workflow-state pairs, {len(plat_open)} platform markers, "
+      f"{len(steps)} steps: {' '.join(steps)}")
 PY
+ok "parser contract intact"
 
 cat <<'EOF'
   note  this checks the five parser-sensitive structures the Trellis docs define.
@@ -213,17 +225,20 @@ printf '%s\n' "$RESOLVED_VERSION" > upstream/VERSION
 ok "upstream/ now mirrors Trellis $RESOLVED_VERSION"
 
 OLD_GRAFT="$(tr -d '[:space:]' < VERSION)"
-NEW_GRAFT="$(python3 -c "
-major, minor, patch = '$OLD_GRAFT'.split('.')
-print(f'{major}.{int(minor) + 1}.0')")"
+NEW_GRAFT="$(python3 -c '
+import sys
+major, minor, _ = sys.argv[1].split(".")
+print(f"{major}.{int(minor) + 1}.0")' "$OLD_GRAFT")"
 printf '%s\n' "$NEW_GRAFT" > VERSION
 ok "graft version $OLD_GRAFT -> $NEW_GRAFT"
 
+# The templates have been copied into upstream/; the unpacked tarball is done with.
+[ -n "${WORK:-}" ] && rm -rf "$WORK"
 rm -f "$STATE"
 
 cat <<EOF
 
-$(printf '\033[32mUpgrade complete.\033[0m') graft $NEW_GRAFT tracks Trellis $RESOLVED_VERSION
+${GRN}Upgrade complete.${RST} graft $NEW_GRAFT tracks Trellis $RESOLVED_VERSION
 
 Review the diff, then publish:
 
