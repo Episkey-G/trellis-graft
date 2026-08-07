@@ -112,7 +112,10 @@ esac
 # gives you new syntax against an old parser.
 
 if [ "$SCENARIO" = "new" ]; then
-  run "(cd '$TARGET' && trellis init --$PLATFORM --workflow '$WORKFLOW_ID' --workflow-source '$MARKETPLACE')"
+  # -y is required, not cosmetic: without it `trellis init` opens an interactive
+  # prompt (statusLine, among others) and dies with ERR_USE_AFTER_CLOSE the moment
+  # it runs anywhere without a TTY.
+  run "(cd '$TARGET' && trellis init -y --$PLATFORM --workflow '$WORKFLOW_ID' --workflow-source '$MARKETPLACE')"
 else
   # -s = skip every file the user modified. In a graft repo those modified files
   # are exactly our customisations, so this updates scripts/hooks and leaves the
