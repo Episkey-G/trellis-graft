@@ -90,7 +90,15 @@ command -v trellis  >/dev/null 2>&1 || die "trellis CLI not on PATH — npm i -g
 command -v python3  >/dev/null 2>&1 || die "python3 not on PATH (Trellis needs it too)"
 command -v git      >/dev/null 2>&1 || die "git not on PATH"
 
-[ -d "$TARGET/.git" ] || die "not a git repository: $TARGET"
+# Trellis itself does not require a repository — `trellis init` works in a plain
+# directory — so this is a warning rather than a gate; nothing this script writes
+# needs git. What needs it is the workflow afterwards: Phase 2.2 dispatches
+# trellis-check with a fixed point and it runs `git diff <ref>...HEAD`, and Phase 3.4
+# is a commit. Both are dead in a non-repo, so say so once, here.
+if [ ! -d "$TARGET/.git" ]; then
+  warn "not a git repository: $TARGET"
+  warn "installing anyway — but Phase 2.2 (trellis-check diffs against a fixed point) and Phase 3.4 (commit) stay broken until you run 'git init'"
+fi
 
 version_lt() { [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" = "$1" ] && [ "$1" != "$2" ]; }
 

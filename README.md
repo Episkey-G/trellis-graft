@@ -99,7 +99,12 @@ curl -fsSL https://raw.githubusercontent.com/Episkey-G/trellis-graft/main/instal
   | bash -s -- --target . --ref v1.0.0
 ```
 
-三条路的硬要求都一样：`trellis`、`git`、`python3` 在 PATH 上，目标是个 git 仓库。
+三条路的硬要求都一样：`trellis`、`git`、`python3` 在 PATH 上。
+
+目标**不必**是 git 仓库——Trellis 自己就不要求，`trellis init` 在纯目录里能跑，这个脚本也
+只是复制文件。不是仓库时它警告一句然后继续。但要知道后果：Phase 2.2 的 `trellis-check`
+要 `git diff <fixed-point>...HEAD`，Phase 3.4 是提交，这两步在非仓库里是死的。想用完整流程
+就先 `git init`。
 
 下文的命令一律写成软链后的 `trellis-graft`，换成前两种写法等价。
 
