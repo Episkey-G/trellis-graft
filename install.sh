@@ -221,6 +221,24 @@ copy agents/channel/check.md            .trellis/agents/check.md
 copy docs/agents/issue-tracker.md       docs/agents/issue-tracker.md
 copy docs/agents/domain.md              docs/agents/domain.md
 
+# Codex, only when `trellis init` configured it. Same three roles as Claude, in Codex's
+# .toml format. The check agent is the one that really differs: upstream ships it
+# workspace-write and self-fixing, this one is sandbox_mode = "read-only" and single-axis,
+# which is a harder guarantee than Claude's tools: allowlist — the sandbox refuses the
+# write rather than the prompt asking it not to.
+if [ -d "$TARGET/.codex/agents" ]; then
+  copy agents/codex/trellis-implement.toml .codex/agents/trellis-implement.toml
+  copy agents/codex/trellis-check.toml     .codex/agents/trellis-check.toml
+  copy agents/codex/trellis-research.toml  .codex/agents/trellis-research.toml
+fi
+
+# The shared skill layer (.agents/skills/) is what Codex reads for /trellis-continue —
+# Claude uses .claude/commands/trellis/continue.md instead. Both inherited upstream's
+# "load trellis-brainstorm" route, which points at the skill this graft replaced.
+if [ -d "$TARGET/.agents/skills" ]; then
+  copy skills/shared/trellis-continue/SKILL.md .agents/skills/trellis-continue/SKILL.md
+fi
+
 # Upstream bug, still live in 0.6.14: ai-tools.js sets cliFlag "claude" for Claude
 # Code, so a fresh `trellis init --claude` writes `--platform claude` into
 # /trellis:continue. The parser only matches "claude-code" / "Claude Code", so every
@@ -322,6 +340,19 @@ if [ "$DRY_RUN" = 1 ]; then
   exit 0
 fi
 
+# One -a per agent. `-a claude-code,codex` is rejected outright ("Invalid agents"),
+# unlike -s where a comma-separated list degrades silently into a listing. Only name
+# the platforms this repo actually has, so a Claude-only repo doesn't grow a stray
+# ~/.agents/skills/ tree.
+SKILL_AGENTS="-a claude-code"
+CODEX_NOTE=""
+if [ -d "$TARGET/.codex" ] || [ -d "$TARGET/.agents/skills" ]; then
+  SKILL_AGENTS="$SKILL_AGENTS -a codex"
+  CODEX_NOTE="
+     This repo has Codex configured, so the command installs to both
+     ~/.claude/skills/ (Claude Code) and ~/.agents/skills/ (Codex)."
+fi
+
 cat <<EOF
 
 ${GRN}Done.${RST} trellis-graft $GRAFT_VERSION installed into $TARGET
@@ -330,13 +361,14 @@ Two things this script deliberately does NOT do — finish them by hand:
 
   1. Install the engineering skills (once per machine, shared by every repo):
 
-     npx skills@latest add mattpocock/skills -g --copy -y -a claude-code \\
+     npx skills@latest add mattpocock/skills -g --copy -y $SKILL_AGENTS \\
        -s grill-with-docs -s grilling -s domain-modeling -s to-spec -s to-tickets \\
        -s tdd -s implement -s code-review -s research -s diagnosing-bugs \\
        -s codebase-design -s prototype
 
-     Repeat -s per skill; a comma-separated list silently falls through to a listing.
-     Use -a claude-code, not -a claude, or it installs into ~20 agent directories.
+     Repeat -s per skill and -a per agent; a comma-separated -s list silently falls
+     through to a listing, and a comma-separated -a list is rejected outright.
+     Use -a claude-code, not -a claude, or it installs into ~20 agent directories.$CODEX_NOTE
 
   2. Start a NEW session in $TARGET. Agent and skill definitions are cached at
      session start, so the ones installed just now do not take effect until then.

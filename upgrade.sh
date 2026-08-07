@@ -56,26 +56,47 @@ command -v git >/dev/null 2>&1 || die "git not on PATH"
 command -v python3 >/dev/null 2>&1 || die "python3 not on PATH"
 
 # Each grafted file, as "<our path>|<path inside dist/templates>".
+#
+# The two continue entries share one upstream source: upstream ships a single
+# common/commands/continue.md and each configurator renders it per platform, so
+# .claude/commands/trellis/continue.md and .agents/skills/trellis-continue/SKILL.md
+# are the same file with different placeholder substitutions. Both merge against
+# that one BASE; see CLI_FLAG_FOR below for the substitution split.
 FILES=(
   "workflows/trellis-mattpocock/workflow.md|trellis/workflow.md"
   "agents/claude/trellis-implement.md|claude/agents/trellis-implement.md"
   "agents/claude/trellis-check.md|claude/agents/trellis-check.md"
   "agents/claude/trellis-research.md|claude/agents/trellis-research.md"
+  "agents/codex/trellis-implement.toml|codex/agents/trellis-implement.toml"
+  "agents/codex/trellis-check.toml|codex/agents/trellis-check.toml"
+  "agents/codex/trellis-research.toml|codex/agents/trellis-research.toml"
   "agents/channel/check.md|trellis/agents/check.md"
   "agents/channel/implement.md|trellis/agents/implement.md"
   "commands/claude/trellis/continue.md|common/commands/continue.md"
+  "skills/shared/trellis-continue/SKILL.md|common/commands/continue.md"
 )
+
+# {{CLI_FLAG}} becomes the value that file's platform passes to
+# `get_context.py --platform`. Substituting the wrong one makes that line conflict on
+# every single upgrade, since ours would say `codex` while both merge sides say
+# `claude-code`. Keyed on our path, because the upstream path is identical for both.
+cli_flag_for() {
+  case "$1" in
+    skills/shared/trellis-continue/*) printf 'codex' ;;
+    *)                                printf 'claude-code' ;;
+  esac
+}
 
 # continue.md ships with {{PYTHON_CMD}} / {{CLI_FLAG}} placeholders that init
 # substitutes. Substituting both merge sides identically makes the merge compare
 # real changes instead of re-conflicting on the placeholder every single time.
-subst() {  # subst <in> <out>
-  python3 - "$1" "$2" <<'PY'
+subst() {  # subst <in> <out> [cli-flag]
+  python3 - "$1" "$2" "${3:-claude-code}" <<'PY'
 import pathlib, sys
-src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+src, dst, cli_flag = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
 dst.write_text(src.read_text(encoding="utf-8")
                .replace("{{PYTHON_CMD}}", "python3")
-               .replace("{{CLI_FLAG}}", "claude-code"), encoding="utf-8")
+               .replace("{{CLI_FLAG}}", cli_flag), encoding="utf-8")
 PY
 }
 
@@ -125,14 +146,17 @@ else
     theirs="$NEW_TEMPLATES/$rel"
     [ -f "$theirs" ] || { warn "$rel vanished upstream — review by hand"; CONFLICTED="$CONFLICTED $ours"; continue; }
 
+    flag="$(cli_flag_for "$ours")"
     b="$(mktemp)"; t="$(mktemp)"
-    subst "upstream/$rel" "$b"
-    subst "$theirs"       "$t"
+    subst "upstream/$rel" "$b" "$flag"
+    subst "$theirs"       "$t" "$flag"
 
+    # Report our path, not the upstream one: the two continue entries share a single
+    # upstream source, so keying the log on $rel would print the same line twice.
     if cmp -s "$b" "$t"; then
-      ok "$rel — upstream unchanged"
+      ok "$ours — upstream unchanged"
     elif git merge-file --diff3 -L ours -L base -L upstream "$ours" "$b" "$t"; then
-      ok "$rel — merged cleanly"
+      ok "$ours — merged cleanly"
     else
       n="$(grep -c '^<<<<<<< ' "$ours" || true)"
       warn "$rel — $n conflict(s) in $ours"

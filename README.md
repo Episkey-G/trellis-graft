@@ -194,18 +194,40 @@ trellis-graft --dry-run
 
 列出将执行的命令和将写入的路径，不落盘。
 
-### 装了哪 8 个文件
+### 装了哪些文件
+
+平台无关的 5 个，任何目标仓库都装：
+
+| 落点 | 是什么 |
+| --- | --- |
+| `.trellis/agents/implement.md` | channel runtime 版，同样 red-green-refactor |
+| `.trellis/agents/check.md` | channel runtime 版，去掉自我修复，改为只报告 |
+| `docs/agents/issue-tracker.md` | 把技能说的 "issue tracker" 映射到 `.trellis/tasks/` |
+| `docs/agents/domain.md` | 划清 `CONTEXT.md` / `docs/adr/` 与 `.trellis/spec/` 的分工 |
+| `.trellis/workflow.md` | 由官方 `trellis workflow` 从 marketplace 换入，不是本脚本写的 |
+
+Claude Code 的 4 个：
 
 | 落点 | 是什么 |
 | --- | --- |
 | `.claude/agents/trellis-implement.md` | 驱动 `tdd`；`tools` 加了 `Skill`（上游没有，导致它调不动技能） |
 | `.claude/agents/trellis-check.md` | 单轴只读评审，从 dispatch prompt 读 `Axis:`；带 Fowler 坏味道基线 |
 | `.claude/agents/trellis-research.md` | 加载 `research`，只回文件路径和一行摘要，不回正文 |
-| `.trellis/agents/implement.md` | channel runtime 版，同样 red-green-refactor |
-| `.trellis/agents/check.md` | channel runtime 版，去掉自我修复，改为只报告 |
-| `.claude/commands/trellis/continue.md` | 修 `--platform` 值（见下） |
-| `docs/agents/issue-tracker.md` | 把技能说的 "issue tracker" 映射到 `.trellis/tasks/` |
-| `docs/agents/domain.md` | 划清 `CONTEXT.md` / `docs/adr/` 与 `.trellis/spec/` 的分工 |
+| `.claude/commands/trellis/continue.md` | 修 `--platform` 值（见下），并把 1.1 路由改到 `/grill-with-docs` |
+
+Codex 的 4 个，**仅当目标仓库有 `.codex/agents/`**（即 `trellis init` 配过 Codex）才装：
+
+| 落点 | 是什么 |
+| --- | --- |
+| `.codex/agents/trellis-implement.toml` | 同 Claude 版：驱动 `tdd`，按 vertical slice 走，禁止 commit |
+| `.codex/agents/trellis-check.toml` | 单轴只读评审。`sandbox_mode = "read-only"`——上游是 `workspace-write` 且会自我修复 |
+| `.codex/agents/trellis-research.toml` | 外部调研走 `research` 技能的 primary-source 纪律 |
+| `.agents/skills/trellis-continue/SKILL.md` | Codex 走的 continue 入口，同样把 1.1 路由改到 `/grill-with-docs` |
+
+Codex 的 check 值得单说：Claude 版靠 frontmatter 的 `tools:` 白名单挡住写操作，Codex 版是
+`sandbox_mode = "read-only"`——**沙箱级强制**，比"提示词请求它别改"硬。代价是 lint 若要写
+缓存（`.tsbuildinfo`、eslint cache）会失败，所以 agent 定义里写明了这种失败要报成
+"not runnable under read-only"，不能当成代码有问题。
 
 外加 `AGENTS.md` 里一段用 marker 包裹的说明，位置在 `<!-- TRELLIS -->` 托管块**之外**，
 所以 `trellis update` 会把 AGENTS.md 判为 unchanged，不会来打扰。
@@ -239,14 +261,18 @@ description 从此不进上下文，模型看不到、也调不动；你仍然�
 **1. 装技能**（每台机器一次，14 个仓库共享）：
 
 ```bash
-npx skills@latest add mattpocock/skills -g --copy -y -a claude-code \
+npx skills@latest add mattpocock/skills -g --copy -y -a claude-code -a codex \
   -s grill-with-docs -s grilling -s domain-modeling -s to-spec -s to-tickets \
   -s tdd -s implement -s code-review -s research -s diagnosing-bugs \
   -s codebase-design -s prototype
 ```
 
-`-s` 必须每个技能重复一次，逗号分隔会静默退化成列出清单。
-`-a claude-code` 不能写成 `-a claude`，否则会往约 20 个 agent 目录里各装一份。
+`-s` 和 `-a` 都必须每项重复一次。`-s` 用逗号分隔会静默退化成列出清单；`-a` 用逗号分隔
+直接报 `Invalid agents` 拒绝执行。`-a claude-code` 不能写成 `-a claude`，否则会往约 20 个
+agent 目录里各装一份。
+
+落点：`-a claude-code` → `~/.claude/skills/`，`-a codex` → `~/.agents/skills/`。只用 Claude
+就把 `-a codex` 去掉——`install.sh` 跑完打印的那条命令会按目标仓库实际配了哪些平台自动带上。
 
 **2. 开新会话。** agent 和 skill 定义在会话启动时缓存，刚装的这些在当前会话里不生效。
 

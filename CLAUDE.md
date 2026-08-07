@@ -144,11 +144,19 @@ ln -s "$PWD/install.sh" ~/.local/bin/trellis-graft
 | --- | --- |
 | `upstream/` | **生成物**，上游模板逐字节副本，合并的 BASE，只由 upgrade.sh 写 |
 | `VERSION` | **生成物**，由 upgrade.sh 递增 |
-| `workflows/`、`agents/`、`commands/`、`docs/`、`snippets/` | 手写的改造产物，冲突就发生在这里 |
+| `workflows/`、`agents/`、`commands/`、`skills/`、`docs/`、`snippets/` | 手写的改造产物，冲突就发生在这里 |
 | `install.sh` | 消费仓库侧唯一命令，可从任意位置调用 |
 | `upgrade.sh` | 本仓库侧唯一命令，必须在 checkout 里跑 |
 | `index.json` | marketplace 索引，`--workflow-source` 读它 |
 | `.upgrade-state` | 冲突时的断点，gitignore，`--continue` 读它 |
 
-`upgrade.sh` 的作用面写死在 [upgrade.sh:59-67](upgrade.sh:59) 的 `FILES` 数组里，7 个文件。
+`agents/` 按平台分目录：`claude/`（.md）、`codex/`（.toml）、`channel/`（平台无关的
+channel runtime）。`skills/shared/` 是 `.agents/skills/` 共享层的产物，Codex 读它。
+
+`upgrade.sh` 的作用面写死在 [upgrade.sh:65-77](upgrade.sh:65) 的 `FILES` 数组里，11 个文件。
 新增一个需要跟上游同步的产物时，要同时加进这个数组，否则它会静默漏掉。
+
+两个 continue 条目**共享同一个上游源** `common/commands/continue.md`——上游只有一份，
+各平台 configurator 渲染出不同格式。它们靠 [upgrade.sh:83](upgrade.sh:83) 的 `cli_flag_for`
+分别把 `{{CLI_FLAG}}` 替换成 `claude-code` / `codex`；替换错会让 `--platform` 那行每次升级
+都冲突。新增走同一模板的平台时，要同时加 `FILES` 条目和 `cli_flag_for` 分支。
