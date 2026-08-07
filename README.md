@@ -22,24 +22,74 @@ Trellis 保留三阶段状态机、任务树、per-turn 断点注入、spec 注�
 
 ---
 
-## 一、全新仓库怎么接
+## 平台支持
+
+`workflow.md` 本身是**完全平台无关**的——它内建 18 个平台的路由块，
+Trellis 的解析器对平台名做模糊匹配（转小写、去 `-`/`_`/空格）。实测：
+
+```
+--platform codex     -> 正常     --platform cursor    -> 正常
+--platform gemini    -> 正常     --platform opencode  -> 正常
+--platform claude    -> 正文被丢  --platform claude-code -> 正常
+```
+
+所以**官方通道对任何平台都直接可用**：
 
 ```bash
-trellis init --claude \
-  --workflow trellis-mattpocock \
+trellis init --codex --workflow trellis-mattpocock \
   --workflow-source gh:Episkey-G/trellis-graft
 ```
 
-这一步只装 workflow.md。agent 定义、`/trellis:continue` 修复和说明文档还要跑一次：
+`install.sh` 装的 8 项里，平台相关性是这样：
+
+| 产物 | 平台 |
+| --- | --- |
+| `.trellis/agents/{check,implement}.md` | 通用（channel runtime 的 platform-agnostic role card） |
+| `docs/agents/*.md`、`AGENTS.md` 段落 | 通用 |
+| `.claude/agents/trellis-*.md` | **仅 Claude Code**。Trellis 为 14 个平台各出一套；Codex 例外，它用 `.codex/agents/*.toml` |
+| `.claude/commands/trellis/continue.md` | **仅 Claude Code 需要**（见文末的上游 bug 一节；其他平台的 cliFlag 与块名模糊匹配后相等，不受影响） |
+
+**当前 `install.sh` 只支持 Claude Code**——复制路径写死在 `.claude/` 下。
+其他平台可以先用官方通道拿到 workflow.md，那已经是这套东西的主体；
+sub-agent 定义要么沿用 Trellis 自带的，要么手动照着 `agents/claude/` 的内容改写成
+目标平台的格式。
+
+---
+
+## 场景一：仓库还没装过 Trellis
+
+一条命令搞定，`install.sh` 发现 `.trellis/` 不存在时会自己调 `trellis init`：
 
 ```bash
-/path/to/trellis-graft/install.sh --target .
+/path/to/trellis-graft/install.sh --target /path/to/your-repo
 ```
 
-嫌两条麻烦就只跑第二条——`install.sh` 发现 `.trellis/` 不存在时会自己调
-`trellis init`（平台默认 `claude`，用 `--platform` 改）。
+平台默认 `claude`，换平台用 `--platform`：
 
-想让 `trellis init` 每次都带上这套，在 `~/.zshrc` 里包一层：
+```bash
+/path/to/trellis-graft/install.sh --target . --platform cursor
+```
+
+它内部执行的是：
+
+```bash
+trellis init -y --claude \
+  --workflow trellis-mattpocock \
+  --workflow-source gh:Episkey-G/trellis-graft
+# 然后复制 8 个文件 + 注入 AGENTS.md 段落
+```
+
+`-y` 不是可有可无的：不加它 `trellis init` 会弹交互提示（statusLine 等），
+在任何没有 TTY 的地方直接 `ERR_USE_AFTER_CLOSE` 崩掉。
+
+**只想要 workflow.md、不要 agent 定义**，那就只跑官方那一条：
+
+```bash
+trellis init --claude --workflow trellis-mattpocock \
+  --workflow-source gh:Episkey-G/trellis-graft
+```
+
+想让每个新仓库都自动带上，在 `~/.zshrc` 里包一层：
 
 ```bash
 tinit() {
@@ -51,16 +101,15 @@ tinit() {
 
 ---
 
-## 二、已有仓库怎么接、怎么升级
+## 场景二 / 三：仓库已装 Trellis —— 接入，或升级
 
-**这两件事是同一条命令。**
+**场景二**（已装原版 Trellis，要接入这套）和 **场景三**（已装这套，要升级到新版）
+**是同一条命令**。脚本看 `AGENTS.md` 里有没有 `MATTPOCOCK-GRAFT` marker 判断是哪种，
+但两者的动作完全一样：
 
 ```bash
 /path/to/trellis-graft/install.sh --target /path/to/your-repo
 ```
-
-脚本自己判断是首次接入还是后续升级（看 `AGENTS.md` 里有没有 `MATTPOCOCK-GRAFT` marker），
-两种情况的动作完全一样。
 
 ### 它内部到底跑了什么
 
@@ -75,7 +124,7 @@ trellis workflow -m gh:Episkey-G/trellis-graft -t trellis-mattpocock -f
 ```
 
 **为什么是 `-s`**：`-s` = skip all modified。装了这套 graft 的仓库里，被 `trellis update`
-判为 "Modified by you" 的恰好就是我们改过的那 8 个文件。跳过它们、只更新
+判为 "Modified by you" 的恰好就是我们改过的那几个文件。跳过它们、只更新
 scripts / hooks，正是我们要的——而且非交互，所以能写进脚本。
 
 **为什么是 `-f`**：`workflow.md` 必然是 modified 状态，不加 `-f` 会停下来问。
@@ -84,6 +133,17 @@ scripts / hooks，正是我们要的——而且非交互，所以能写进脚�
 **为什么这个顺序不能反**：`.trellis/scripts/` 下的 hook 就是读 workflow.md 的解析器。
 必须先让解析器到新版，再让新语法的 workflow.md 落地。反过来会出现新语法配旧解析器，
 症状是断点或 phase 正文静默变空。
+
+**Trellis 版本太旧怎么办**：不用管，第 1 步的 `trellis update` 会把它拉到当前 CLI 版本。
+先升级全局 CLI 即可：`npm i -g @mindfoldhq/trellis@latest`。
+
+### 先看看会改什么
+
+```bash
+/path/to/trellis-graft/install.sh --target /path/to/your-repo --dry-run
+```
+
+列出将执行的命令和将写入的路径，不落盘。
 
 ### 装了哪 8 个文件
 
@@ -128,7 +188,7 @@ python3 ./.trellis/scripts/get_context.py --mode phase --step 2.2 --platform cla
 
 ---
 
-## 三、Trellis 官方发新版了怎么办
+## 场景四：Trellis 官方发新版了，这个仓库怎么跟
 
 ```bash
 cd /path/to/trellis-graft
@@ -160,7 +220,7 @@ THEIRS = 新版 npm 包里的同一文件      上游的新原版
 ./upgrade.sh --continue
 ```
 
-从第 4 步接着跑。
+从第 4 步接着跑。冲突没解干净就 `--continue` 会被拒绝。
 
 **冲突只会出现在你改过的地方。** 实测把上游 0.6.7→0.6.14 那 39 行变更压到这套 graft 上，
 产生 4 个冲突，全部落在改写过的 `#### 1.2` / `#### 2.1` / `#### 2.2` 三个 step 正文内；
@@ -176,6 +236,14 @@ THEIRS = 新版 npm 包里的同一文件      上游的新原版
 
 跨 7 个版本、约 3.5 周，只有 workflow.md 动过一次。多数版本升级是零冲突的，
 `trellis update` 只更新 scripts / hooks，而那些本来就自动覆盖。
+
+### 升完之后
+
+各消费仓库再跑一次场景二/三那条命令即可：
+
+```bash
+/path/to/trellis-graft/install.sh --target .
+```
 
 ---
 
