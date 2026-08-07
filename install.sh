@@ -146,10 +146,26 @@ GRAFT_VERSION="$(tr -d '[:space:]' < "$SRC/VERSION")"
 
 # ----------------------------------------------------------------- scenario --
 
+# The AGENTS.md marker is the primary signal, but it only exists from 1.0.0 on and
+# a repo can lose it (hand-copied artifacts, a rewritten AGENTS.md). Keying on it
+# alone reports "first-time adoption" while the copies below overwrite real files —
+# and a user who reads "first-time" has no reason to review that diff. So fall back
+# to traces the graft leaves in files Trellis also owns:
+#   - docs/agents/ — created only by this script
+#   - the `Skill` entry in trellis-implement.md's tools: upstream ships the same
+#     path without it, so its presence cannot come from `trellis init`
+graft_artifacts_present() {
+  if [ -f "$TARGET/docs/agents/issue-tracker.md" ]; then return 0; fi
+  grep -q '^tools:.*\bSkill\b' "$TARGET/.claude/agents/trellis-implement.md" 2>/dev/null
+}
+
+MARKER_MISSING=0
 if [ ! -d "$TARGET/.trellis" ]; then
   SCENARIO="new"
 elif grep -q 'MATTPOCOCK-GRAFT:START' "$TARGET/AGENTS.md" 2>/dev/null; then
   SCENARIO="upgrade"
+elif graft_artifacts_present; then
+  SCENARIO="upgrade"; MARKER_MISSING=1
 else
   SCENARIO="adopt"
 fi
@@ -159,6 +175,11 @@ case "$SCENARIO" in
   adopt)   info "scenario: first-time adoption (stock Trellis present)" ;;
   upgrade) info "scenario: upgrade (graft already installed)" ;;
 esac
+# Plain `[ … ] && warn` would return non-zero when the marker is present, and
+# under `set -e` that ends the run right here.
+if [ "$MARKER_MISSING" = 1 ]; then
+  warn "graft artifacts found without an AGENTS.md marker — hand-installed, or the marker was removed. This run overwrites them; review the diff afterwards."
+fi
 
 # ------------------------------------------------------- workflow.md, official --
 # Order matters: `trellis update` first, so scripts/hooks (the parsers) are on the
