@@ -347,7 +347,7 @@ If a question needs a *runnable* answer — a state model, a piece of business l
 
 **Stage 2 — Spec.** When the interview has settled, ask the user to type `/to-spec`; it synthesizes the thread into the task's `prd.md`. Do not write `prd.md` yourself while waiting. **Do not interview again** — `to-spec` is pure synthesis of what stage 1 already settled. Before writing, sketch the seams you'll test the feature at, prefer existing seams to new ones, use the highest seam possible, and check those seams with the user.
 
-Write into the Trellis task artifacts, not into a tracker (see `docs/agents/issue-tracker.md`):
+The stage writes the active task's artifacts:
 - `prd.md` — problem statement, solution, an extensive numbered list of user stories, implementation decisions, testing decisions, out of scope
 - `design.md` (complex tasks) — technical design
 - `implement.md` (complex tasks) — ordered execution checklist, validation commands, rollback points
