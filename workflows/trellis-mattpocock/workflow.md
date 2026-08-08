@@ -193,10 +193,10 @@ Complex task: ask the user if you can create a Trellis task and enter the planni
 <!-- Per-turn breadcrumb: shown throughout Phase 1 (status='planning') -->
 
 [workflow-state:planning]
-Stay in planning. 1.1 is user-invoked: ask for `/grill-with-docs`, then `/to-spec` once the interview settles, then `/to-tickets` only if multi-deliverable. Never improvise the interview or write `prd.md` yourself. Keep the chain in ONE context window.
-Tracker words are Trellis words here: the spec = active task's `prd.md`; a ticket = `task.py create --parent`; `ready-for-agent` = `task.py start` at 1.4. Translate silently.
-Lightweight: `prd.md` alone. Complex: + `design.md` + `implement.md`, reviewed before `task.py start`.
-Curate `implement.jsonl` / `check.jsonl` before start.
+Ask the user to run `/grill-with-docs`, then `/to-spec`; stay in planning. Do not improvise the interview or write `prd.md` yourself.
+Lightweight: `prd.md` can be enough. Complex: finish `prd.md`, `design.md`, and `implement.md`; ask for review before `task.py start`.
+Multi-deliverable scope: consider a parent task plus independently verifiable child tasks; dependencies must be written in child artifacts, not implied by tree position.
+Sub-agent mode: curate `implement.jsonl` and `check.jsonl` as spec/research manifests before start.
 [/workflow-state:planning]
 
 <!-- Per-turn breadcrumb: shown throughout Phase 1 when codex.dispatch_mode=inline.
@@ -206,10 +206,9 @@ Curate `implement.jsonl` / `check.jsonl` before start.
      into a sub-agent. -->
 
 [workflow-state:planning-inline]
-Stay in planning. 1.1 is user-invoked: ask for `/grill-with-docs`, then `/to-spec` once the interview settles, then `/to-tickets` only if multi-deliverable. Never improvise the interview or write `prd.md` yourself.
-Tracker words are Trellis words here: the spec = active task's `prd.md`; a ticket = `task.py create --parent`; `ready-for-agent` = `task.py start` at 1.4. Translate silently.
+Ask the user to run `/grill-with-docs`, then `/to-spec`; stay in planning. Do not improvise the interview or write `prd.md` yourself.
 Lightweight: `prd.md` can be enough. Complex: finish `prd.md`, `design.md`, and `implement.md`; ask for review before `task.py start`.
-Child tasks carry blocking edges in their own `prd.md`, never implied by tree position.
+Multi-deliverable scope: consider a parent task plus independently verifiable child tasks; dependencies must be written in child artifacts, not implied by tree position.
 Inline mode: skip jsonl curation; Phase 2 reads artifacts/specs via `trellis-before-dev`.
 [/workflow-state:planning-inline]
 
