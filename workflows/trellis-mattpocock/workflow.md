@@ -193,12 +193,8 @@ Complex task: ask the user if you can create a Trellis task and enter the planni
 <!-- Per-turn breadcrumb: shown throughout Phase 1 (status='planning') -->
 
 [workflow-state:planning]
-Stay in planning. The 1.1 chain is USER-INVOKED — all three carry `disable-model-invocation`, so you cannot load them and they are not in your skill list. Your job each turn is to name the next one and wait:
-  no interview yet                      -> ask the user to type `/grill-with-docs`
-  interview settled, no `prd.md` yet    -> ask the user to type `/to-spec`
-  `prd.md` done, several independently verifiable deliverables -> ask the user to type `/to-tickets`
-Never improvise the interview and never write `prd.md` yourself — a simulated interview looks like progress and produces a spec nobody stress-tested. Keep the whole chain in ONE context window.
-Those skills publish to a GitHub tracker they assume exists. Here: "publish the spec" = the active task's `prd.md`; "a ticket" = `task.py create --parent`; "apply `ready-for-agent`" = nothing now, it is `task.py start` at 1.4. Never `.scratch/`, never `gh issue create`. Translate silently — this is configured, not a gap to report.
+Stay in planning. 1.1 is user-invoked: ask for `/grill-with-docs`, then `/to-spec` once the interview settles, then `/to-tickets` only if multi-deliverable. Never improvise the interview or write `prd.md` yourself. Keep the chain in ONE context window.
+Tracker words are Trellis words here: the spec = active task's `prd.md`; a ticket = `task.py create --parent`; `ready-for-agent` = `task.py start` at 1.4. Translate silently.
 Lightweight: `prd.md` alone. Complex: + `design.md` + `implement.md`, reviewed before `task.py start`.
 Curate `implement.jsonl` / `check.jsonl` before start.
 [/workflow-state:planning]
@@ -210,12 +206,10 @@ Curate `implement.jsonl` / `check.jsonl` before start.
      into a sub-agent. -->
 
 [workflow-state:planning-inline]
-Stay in planning. The 1.1 chain is USER-INVOKED — all three carry `disable-model-invocation`, so you cannot load them. Name the next one and wait:
-  no interview yet -> ask for `/grill-with-docs`; interview settled, no `prd.md` -> ask for `/to-spec`; multi-deliverable -> ask for `/to-tickets`.
-Never improvise the interview and never write `prd.md` yourself.
-Those skills publish to a GitHub tracker they assume exists. Here: "publish the spec" = the active task's `prd.md`; "a ticket" = `task.py create --parent`; "apply `ready-for-agent`" = nothing now, it is `task.py start` at 1.4. Never `.scratch/`, never `gh issue create`. Translate silently — this is configured, not a gap to report.
+Stay in planning. 1.1 is user-invoked: ask for `/grill-with-docs`, then `/to-spec` once the interview settles, then `/to-tickets` only if multi-deliverable. Never improvise the interview or write `prd.md` yourself.
+Tracker words are Trellis words here: the spec = active task's `prd.md`; a ticket = `task.py create --parent`; `ready-for-agent` = `task.py start` at 1.4. Translate silently.
 Lightweight: `prd.md` can be enough. Complex: finish `prd.md`, `design.md`, and `implement.md`; ask for review before `task.py start`.
-`to-tickets` splits into tracer-bullet child tasks; each child's blocking edges go in its own `prd.md`, never implied by tree position.
+Child tasks carry blocking edges in their own `prd.md`, never implied by tree position.
 Inline mode: skip jsonl curation; Phase 2 reads artifacts/specs via `trellis-before-dev`.
 [/workflow-state:planning-inline]
 
