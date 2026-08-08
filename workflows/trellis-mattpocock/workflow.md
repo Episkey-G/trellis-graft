@@ -198,6 +198,7 @@ Stay in planning. The 1.1 chain is USER-INVOKED — all three carry `disable-mod
   interview settled, no `prd.md` yet    -> ask the user to type `/to-spec`
   `prd.md` done, several independently verifiable deliverables -> ask the user to type `/to-tickets`
 Never improvise the interview and never write `prd.md` yourself — a simulated interview looks like progress and produces a spec nobody stress-tested. Keep the whole chain in ONE context window.
+Those skills publish to a GitHub tracker they assume exists. Here: "publish the spec" = the active task's `prd.md`; "a ticket" = `task.py create --parent`; "apply `ready-for-agent`" = nothing now, it is `task.py start` at 1.4. Never `.scratch/`, never `gh issue create`. Translate silently — this is configured, not a gap to report.
 Lightweight: `prd.md` alone. Complex: + `design.md` + `implement.md`, reviewed before `task.py start`.
 Curate `implement.jsonl` / `check.jsonl` before start.
 [/workflow-state:planning]
@@ -212,6 +213,7 @@ Curate `implement.jsonl` / `check.jsonl` before start.
 Stay in planning. The 1.1 chain is USER-INVOKED — all three carry `disable-model-invocation`, so you cannot load them. Name the next one and wait:
   no interview yet -> ask for `/grill-with-docs`; interview settled, no `prd.md` -> ask for `/to-spec`; multi-deliverable -> ask for `/to-tickets`.
 Never improvise the interview and never write `prd.md` yourself.
+Those skills publish to a GitHub tracker they assume exists. Here: "publish the spec" = the active task's `prd.md`; "a ticket" = `task.py create --parent`; "apply `ready-for-agent`" = nothing now, it is `task.py start` at 1.4. Never `.scratch/`, never `gh issue create`. Translate silently — this is configured, not a gap to report.
 Lightweight: `prd.md` can be enough. Complex: finish `prd.md`, `design.md`, and `implement.md`; ask for review before `task.py start`.
 `to-tickets` splits into tracer-bullet child tasks; each child's blocking edges go in its own `prd.md`, never implied by tree position.
 Inline mode: skip jsonl curation; Phase 2 reads artifacts/specs via `trellis-before-dev`.

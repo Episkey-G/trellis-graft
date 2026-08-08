@@ -54,8 +54,24 @@ per-repo and does not modify them.
 
 ### Issue tracker
 
-Issues, specs, and tickets live in the Trellis task tree under `.trellis/tasks/` — not
-GitHub Issues, not `.scratch/`. See `docs/agents/issue-tracker.md`.
+**This section is the configuration** that `to-spec`, `to-tickets`, and `research` mean when
+they say the tracker and label vocabulary "should have been provided to you". It is provided,
+here. Do **not** run `/setup-matt-pocock-skills` — it rewrites this block in place, and with
+no git remote its default answer is a `.scratch/` tracker, which is exactly what this graft
+replaces.
+
+Those skills carry unconditional publish instructions written for GitHub. Translate on sight;
+do not re-derive the mapping each time, and do not report the mismatch as a finding:
+
+| The skill's words | What to actually do |
+| --- | --- |
+| "publish the spec to the project issue tracker" | Write the active task's `prd.md`. `python3 ./.trellis/scripts/task.py current --source` gives the path. Never a file outside the task tree. |
+| "apply the `ready-for-agent` triage label" | Nothing to apply — there are no labels here. Lifecycle state is `task.json.status`, and what actually marks a task agent-ready is `task.py start` at step 1.4, after the artifact review. Not at spec-writing time. |
+| "publish the tickets to the configured tracker" | `task.py create "<title>" --slug <name> --parent <parent-dir>`, one child task per slice, blockers first. Not `.scratch/<feature>/issues/NN-slug.md`, not `gh issue create`. |
+| "blocking edges" / "Blocked by" | Write them into each child's own `prd.md`. The tree carries parent/child, but tree position never implies a blocking edge. |
+| "fetch the relevant ticket" | `task.py current --source`, then read that directory's `prd.md`. |
+
+Full mapping, including the reasoning: `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 
@@ -63,5 +79,8 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 
 ### Triage labels
 
-Not used — the `triage` skill is not installed, and lifecycle state lives in
-`task.json.status`.
+None. The `triage` skill is not installed and would be redundant if it were: it is a state
+machine for issues **other people file** (`needs-triage` → `needs-info` → `ready-for-agent`
+→ `ready-for-human` → `wontfix`). Trellis tasks are ones you grilled into existence, so the
+first two states cannot occur, `ready-for-agent` is `task.py start`, and `wontfix` is
+`task.py archive`. Lifecycle state lives in `task.json.status`.
